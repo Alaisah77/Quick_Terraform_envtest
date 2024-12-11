@@ -1,39 +1,4 @@
-# Fetch the latest Red Hat Enterprise Linux AMI (free-tier eligible)
-data "aws_ami" "rhel_ami" {
-  most_recent = true
-  owners      = ["309956199498"]  # AWS Red Hat AMI owner ID
-  filter {
-    name   = "name"
-    values = ["RHEL-7.*GA*"]  # Adjust this if you need a different version
-  }
-  filter {
-    name   = "architecture"
-    values = ["x86_64"]
-  }
-}
-
-# Create a new key pair and store the private key locally
-resource "aws_key_pair" "generated_key" {
-  key_name   = "my-generated-key"
-  public_key = file("~/.ssh/id_rsa.pub")  # Replace with your actual public key path
-}
-
-# Save the private key locally (Optional: if a new key pair is generated)
-resource "local_file" "private_key" {
-  content  = tls_private_key.generated_key.private_key_pem
-  filename = "${path.module}/my-generated-key.pem"
-  provisioner "local-exec" {
-    command = "chmod 400 ${path.module}/my-generated-key.pem"
-  }
-}
-
-# Generate a private/public key pair (Optional: if generating a new key pair)
-resource "tls_private_key" "generated_key" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
-}
-
-# Security Group to allow SSH access
+# Resource: Security Group (Optional, for SSH access)
 resource "aws_security_group" "instance_sg" {
   name        = "instance-sg"
   description = "Allow SSH access to the EC2 instance"
@@ -43,7 +8,7 @@ resource "aws_security_group" "instance_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Restrict this for production
+    cidr_blocks = ["0.0.0.0/0"]  # Adjust for specific IP ranges
   }
 
   egress {
@@ -54,15 +19,20 @@ resource "aws_security_group" "instance_sg" {
   }
 }
 
-# Launch EC2 instance
+# Resource: EC2 Instance
 resource "aws_instance" "my_instance" {
-  ami           = data.aws_ami.rhel_ami.id
+  ami           = var.ami_id
   instance_type = var.instance_type
+  key_name      = var.key_name
   subnet_id     = var.subnet_id
-  key_name      = aws_key_pair.generated_key.key_name
 
+  # Associate public IP address
+  associate_public_ip_address = true
+
+  # Assign security group
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
 
+  # Tags
   tags = {
     Name = var.instance_name
   }
